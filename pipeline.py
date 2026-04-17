@@ -57,6 +57,7 @@ Examples:
     parser.add_argument("--format", choices=["vertical", "square", "both"], default="vertical",
                         help="Output format (default: vertical)")
     parser.add_argument("--concurrency", type=int, default=3, help="Parallel renders (default: 3)")
+    parser.add_argument("--context", help="Path to episode context JSON (default: config/episode.json)")
     parser.add_argument("--skip-layout", action="store_true", help="Skip layout detection")
     parser.add_argument("--step", choices=["transcribe", "layout", "select", "cut", "prepare"],
                         help="Run a single step only")
@@ -125,6 +126,9 @@ Examples:
         step_args = [transcript_path]
         if os.path.exists(layout_path):
             step_args += ["--layout", layout_path]
+        context_path = args.context or str(ROOT / "config" / "episode.json")
+        if os.path.exists(context_path):
+            step_args += ["--context", context_path]
         step_args += ["--output-dir", review_dir]
         rc = run_step("select_clips.py", step_args, "Select Clips")
         if rc != 0:

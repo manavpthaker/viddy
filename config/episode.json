@@ -1,0 +1,23 @@
+{
+  "show_name": "",
+  "host_name": "",
+  "guest_name": "",
+  "guest_bio": "",
+  "episode_topic": "",
+  "platform": "LinkedIn",
+  "audience": "Founders, PMs, senior professionals in career transition",
+  "tone": "Clean, high-end, minimal. Documentary feel. Respectful, not hype.",
+  "themes_that_perform": [
+    "hard decisions",
+    "career pivots",
+    "identity and purpose",
+    "broken systems",
+    "counterintuitive insights"
+  ],
+  "themes_to_avoid": [
+    "compensation details",
+    "generic career tips",
+    "anything that needs full episode context"
+  ],
+  "notes": ""
+}
