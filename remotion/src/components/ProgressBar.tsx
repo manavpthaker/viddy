@@ -8,7 +8,7 @@ interface ProgressBarProps {
 
 export const ProgressBar: React.FC<ProgressBarProps> = ({config}) => {
   const frame = useCurrentFrame();
-  const {durationInFrames} = useVideoConfig();
+  const {durationInFrames, height: videoHeight} = useVideoConfig();
 
   if (!config.enabled) return null;
 
@@ -18,7 +18,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({config}) => {
     <div
       style={{
         position: 'absolute',
-        top: config.position === 'top' ? (config.top_offset_px || Math.round(height * 0.12)) : undefined,
+        top: config.position === 'top' ? (config.top_offset_px || Math.round(videoHeight * 0.12)) : undefined,
         bottom: config.position === 'bottom' ? 0 : undefined,
         left: 0,
         right: 0,
