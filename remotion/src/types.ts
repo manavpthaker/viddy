@@ -52,6 +52,7 @@ export interface ProgressBarConfig {
   height_px: number;
   color: string;
   bg_color: string;
+  top_offset_px?: number;
 }
 
 export interface RenderData {

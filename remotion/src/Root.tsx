@@ -44,12 +44,12 @@ const defaultRenderData: RenderData = {
   },
   speaker_tracking: {
     timeline: [],
-    base_scale: 1.6,
+    base_scale: 1.35,
     transition_seconds: 0.4,
   },
   zoom_emphasis: {
     moments: [],
-    zoom_scale: 2.2,
+    zoom_scale: 1.06,
   },
   brand: {
     colors: {

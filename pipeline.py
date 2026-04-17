@@ -179,7 +179,12 @@ Examples:
             print("Clip cutting failed.", file=sys.stderr)
             sys.exit(1)
 
-        # Step 5: Prepare render data
+        # Step 5: Trim silence from clips
+        rc = run_step("trim_silence.py", [clips_dir], "Trim Silence")
+        if rc != 0:
+            print("Silence trimming failed. Continuing with untrimmed clips.", file=sys.stderr)
+
+        # Step 6: Prepare render data
         step_args = [transcript_path, manifest_path]
         if os.path.exists(layout_path):
             step_args += ["--layout", layout_path]

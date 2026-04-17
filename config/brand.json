@@ -4,16 +4,17 @@
     "caption_text": "#FFFFFF",
     "caption_highlight": "#7B9E87",
     "progress_bar": "#7B9E87",
-    "progress_bar_bg": "rgba(255,255,255,0.15)"
+    "progress_bar_bg": "rgba(255,255,255,0.1)"
   },
   "fonts": {
     "caption": "DM Sans",
     "caption_weight": 800,
-    "caption_size_px": 64
+    "caption_size_px": 58
   },
-  "caption_position": "bottom_center",
+  "caption_position": "safe_zone_center",
   "caption_margin_bottom_px": 180,
-  "progress_bar_height_px": 4,
+  "progress_bar_height_px": 3,
+  "progress_bar_top_offset_px": 230,
   "logo_path": null,
   "watermark": null
 }
