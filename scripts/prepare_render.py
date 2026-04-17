@@ -60,32 +60,89 @@ def build_caption_groups(words: list[dict], words_per_group: int = 3) -> list[di
     return groups
 
 
-def build_zoom_timeline(clip_data: dict, layout_data: dict, clip_start_offset: float) -> list[dict]:
-    """Build zoom keyframes for the clip."""
-    zoom_moments = clip_data.get("zoom_moments", [])
+def build_speaker_timeline(clip_data: dict, layout_data: dict, clip_start_offset: float, clip_duration: float) -> list[dict]:
+    """Build a continuous speaker timeline for the entire clip.
+
+    Uses the speaker_timeline from Claude's clip selection (who's talking when)
+    combined with layout data (where each speaker is positioned) to produce
+    a frame-by-frame speaker tracking guide for the renderer.
+    """
+    speaker_segments = clip_data.get("speaker_timeline", [])
     layout_segments = layout_data.get("segments", [])
 
     timeline = []
-    for zm in zoom_moments:
-        at = zm["at_seconds"] - clip_start_offset
-        target = zm["target"]
-        hold = zm.get("hold_seconds", 5)
 
-        # Find which side this speaker is on at this time
-        position = "center"
-        for seg in layout_segments:
-            if seg.get("from_seconds", 0) <= zm["at_seconds"] <= seg.get("to_seconds", 99999):
-                positions = seg.get("speaker_positions", {})
-                for side, speaker_id in positions.items():
-                    if speaker_id == target:
-                        position = side
+    if speaker_segments:
+        # Use Claude's speaker timeline (preferred, most accurate)
+        for seg in speaker_segments:
+            from_s = seg.get("from", 0) - clip_start_offset
+            to_s = seg.get("to", 0) - clip_start_offset
+            speaker = seg.get("speaker", "unknown")
+            position = seg.get("position", "center")
+
+            # If position is missing, try to infer from layout
+            if position == "center" or not position:
+                for lseg in layout_segments:
+                    abs_time = seg.get("from", 0)
+                    if lseg.get("from_seconds", 0) <= abs_time <= lseg.get("to_seconds", 99999):
+                        # Check speaker_positions
+                        positions = lseg.get("speaker_positions", {})
+                        for side, sid in positions.items():
+                            if sid == speaker:
+                                position = side
+                                break
+                        # Also check active_speaker for single_speaker layouts
+                        if position == "center" and lseg.get("active_speaker") == speaker:
+                            position = "center"  # single speaker, center is correct
                         break
-                break
+
+            timeline.append({
+                "from_seconds": round(max(0, from_s), 2),
+                "to_seconds": round(min(clip_duration, to_s), 2),
+                "speaker": speaker,
+                "position": position
+            })
+    else:
+        # Fallback: use layout segments to build a basic timeline
+        for lseg in layout_segments:
+            from_s = lseg.get("from_seconds", 0) - clip_start_offset
+            to_s = lseg.get("to_seconds", 99999) - clip_start_offset
+
+            # Skip segments outside clip range
+            if to_s < 0 or from_s > clip_duration:
+                continue
+
+            speaker = lseg.get("active_speaker", "unknown")
+            position = "center"
+            positions = lseg.get("speaker_positions", {})
+            for side, sid in positions.items():
+                if sid == speaker:
+                    position = side
+                    break
+
+            timeline.append({
+                "from_seconds": round(max(0, from_s), 2),
+                "to_seconds": round(min(clip_duration, to_s), 2),
+                "speaker": speaker,
+                "position": position
+            })
+
+    return timeline
+
+
+def build_zoom_moments(clip_data: dict, clip_start_offset: float) -> list[dict]:
+    """Build zoom keyframes for emphasis moments (tighter crop during key points)."""
+    zoom_moments = clip_data.get("zoom_moments", [])
+
+    timeline = []
+    for zm in zoom_moments:
+        at = zm.get("at_seconds", 0) - clip_start_offset
+        target = zm.get("target", "unknown")
+        hold = zm.get("hold_seconds", 5)
 
         timeline.append({
             "at_seconds": round(at, 2),
             "target_speaker": target,
-            "crop_side": position,
             "hold_seconds": hold,
             "transition": "ease_in_out"
         })
@@ -140,8 +197,10 @@ def main():
         # Build caption groups
         caption_groups = build_caption_groups(words, render_config["words_per_group"])
 
-        # Build zoom timeline
-        zoom_timeline = build_zoom_timeline(clip_data, layout_data, source_start - padding)
+        # Build continuous speaker timeline + zoom emphasis moments
+        duration = (source_end + config["cutting"]["padding_after_seconds"]) - (source_start - padding)
+        speaker_timeline = build_speaker_timeline(clip_data, layout_data, source_start - padding, duration)
+        zoom_emphasis = build_zoom_moments(clip_data, source_start - padding)
 
         # Mark highlight words
         highlight_words = set(w.lower() for w in clip_data.get("highlight_words", []))
@@ -151,9 +210,6 @@ def main():
                     hw in word["word"].lower()
                     for hw in highlight_words
                 )
-
-        # Clip duration
-        duration = (source_end + config["cutting"]["padding_after_seconds"]) - (source_start - padding)
 
         render_data = {
             "clip_number": clip_num,
@@ -173,10 +229,15 @@ def main():
                 "words_per_group": render_config["words_per_group"]
             },
 
-            "zoom": {
-                "timeline": zoom_timeline,
-                "default_scale": 1.0,
-                "zoom_scale": 1.8
+            "speaker_tracking": {
+                "timeline": speaker_timeline,
+                "base_scale": 1.6,
+                "transition_seconds": 0.4
+            },
+
+            "zoom_emphasis": {
+                "moments": zoom_emphasis,
+                "zoom_scale": 2.2
             },
 
             "brand": brand,
@@ -194,7 +255,7 @@ def main():
         with open(output_path, "w") as f:
             json.dump(render_data, f, indent=2)
 
-        print(f"  Clip {clip_num}: {len(caption_groups)} caption groups, {len(zoom_timeline)} zoom points")
+        print(f"  Clip {clip_num}: {len(caption_groups)} caption groups, {len(speaker_timeline)} speaker segments, {len(zoom_emphasis)} zoom points")
 
     print(f"\nRender data saved to {output_dir}/")
     print("Next: Run Remotion to render final clips.")

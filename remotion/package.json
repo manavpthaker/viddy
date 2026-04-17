@@ -1,0 +1,25 @@
+{
+  "name": "remotion",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "node render.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@remotion/bundler": "^4.0.448",
+    "@remotion/cli": "^4.0.448",
+    "@remotion/player": "^4.0.448",
+    "@remotion/renderer": "^4.0.448",
+    "@types/react": "^19.2.14",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "remotion": "^4.0.448",
+    "typescript": "^6.0.3"
+  }
+}

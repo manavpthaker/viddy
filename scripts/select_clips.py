@@ -23,9 +23,16 @@ import anthropic
 
 CLIP_SELECTION_PROMPT = """You are an expert video editor who creates viral short-form clips from long-form podcast/interview recordings. Your style reference is "Diary of a CEO" clips — punchy, emotional, insight-dense moments that work as standalone pieces.
 
-You're given a transcript with word-level timestamps and layout information for a recorded conversation.
+You're given a transcript with word-level timestamps, natural pause points, and layout information for a recorded conversation.
 
 **Your job:** Identify the {max_clips} strongest moments for short-form clips ({min_dur}-{max_dur} seconds each, target ~{target_dur}s).
+
+**CRITICAL — Clip boundary rules:**
+- Start timestamps MUST align with the beginning of a sentence or a natural pause point (marked with [PAUSE] in the transcript).
+- End timestamps MUST align with the end of a completed sentence or thought. NEVER cut mid-sentence.
+- Look at the [PAUSE] markers — these are gaps of 0.3+ seconds between words, which are natural cut points.
+- Each clip must begin with a complete sentence and end with a complete sentence. If a great moment starts mid-sentence, back up to the start of that sentence.
+- The first word of the clip should make sense as an opener. The last word should feel like a conclusion or punchline.
 
 **What makes a great clip:**
 1. A single complete thought or story that stands alone without context
@@ -38,18 +45,22 @@ You're given a transcript with word-level timestamps and layout information for 
 1. References to things said earlier that viewers won't have context for
 2. Rambling or unfocused segments
 3. Inside jokes or name-drops that mean nothing to outsiders
-4. Segments that end mid-thought
+4. Segments that end mid-thought or mid-sentence
+5. Clips that start with "and" or "so" referencing something before — unless it's a natural conversational opener
+
+**Speaker tracking:**
+The layout info tells you who is visible and where. For each clip, provide a speaker_timeline that maps out who is talking at each moment. This is used to automatically crop the vertical video to the active speaker. Use the layout segment info to determine which speaker corresponds to which position.
 
 **For each clip, provide:**
-- Start and end timestamps (use the word-level timestamps for precision)
+- Start and end timestamps (MUST be at sentence boundaries — use the pause markers)
 - A suggested hook (the text overlay that would appear in the first 3 seconds)
 - Why this clip works (1 sentence)
 - Which words/phrases should be visually highlighted in captions (the "punch" words)
-- Speaker focus: who is the primary speaker during this clip (for zoom effect)
-- Zoom moments: specific timestamps where the camera should zoom into the primary speaker (moments of emphasis)
+- Speaker timeline: an array of segments showing who is speaking and their position, covering the ENTIRE clip duration
+- Zoom moments: specific timestamps where the camera should zoom in tighter for emphasis
 - A suggested title/caption for the clip
 
-**Layout info for zoom planning:**
+**Layout info (speaker positions):**
 {layout_info}
 
 **Respond in this exact JSON format:**
@@ -62,7 +73,11 @@ You're given a transcript with word-level timestamps and layout information for 
       "hook": "6,000 people applied. Only 1 was hireable.",
       "why": "Visceral data point with emotional payoff",
       "highlight_words": ["six thousand", "one", "hireable"],
-      "primary_speaker": "speaker_a or speaker_b",
+      "speaker_timeline": [
+        {{"from": 272.5, "to": 290.0, "speaker": "speaker_a", "position": "left"}},
+        {{"from": 290.0, "to": 310.0, "speaker": "speaker_b", "position": "right"}},
+        {{"from": 310.0, "to": 348.2, "speaker": "speaker_a", "position": "left"}}
+      ],
       "zoom_moments": [
         {{"at_seconds": 280.0, "target": "speaker_a", "hold_seconds": 6}}
       ],
@@ -72,19 +87,60 @@ You're given a transcript with word-level timestamps and layout information for 
   ]
 }}
 
-**Transcript:**
+**Transcript (with pause markers):**
 {transcript}
 """
 
 
 def format_transcript_for_prompt(data: dict) -> str:
-    """Format transcript with timestamps for the prompt."""
+    """Format transcript with timestamps and pause markers for the prompt.
+
+    Inserts [PAUSE Xs] markers between words where there's a gap > 0.3s,
+    indicating natural cut points for clip boundaries.
+    """
+    words = data.get("words", [])
+    if not words:
+        # Fallback to segments if no words
+        lines = []
+        for seg in data.get("segments", []):
+            start = seg["start"]
+            minutes = int(start // 60)
+            seconds = start % 60
+            lines.append(f"[{minutes:02d}:{seconds:05.2f}] {seg['text'].strip()}")
+        return "\n".join(lines)
+
     lines = []
-    for seg in data.get("segments", []):
-        start = seg["start"]
-        minutes = int(start // 60)
-        seconds = start % 60
-        lines.append(f"[{minutes:02d}:{seconds:05.2f}] {seg['text'].strip()}")
+    current_line_words = []
+    current_line_start = None
+    pause_threshold = 0.3  # seconds
+
+    for i, w in enumerate(words):
+        if current_line_start is None:
+            current_line_start = w["start"]
+
+        current_line_words.append(w["word"])
+
+        # Check for pause after this word
+        if i < len(words) - 1:
+            gap = words[i + 1]["start"] - w["end"]
+            if gap >= pause_threshold:
+                # Emit current line with timestamp
+                minutes = int(current_line_start // 60)
+                seconds = current_line_start % 60
+                line_text = " ".join(current_line_words)
+                lines.append(f"[{minutes:02d}:{seconds:05.2f}] {line_text}")
+                if gap >= 0.5:
+                    lines.append(f"  [PAUSE {gap:.1f}s @ {w['end']:.2f}]")
+                current_line_words = []
+                current_line_start = None
+
+    # Emit remaining words
+    if current_line_words and current_line_start is not None:
+        minutes = int(current_line_start // 60)
+        seconds = current_line_start % 60
+        line_text = " ".join(current_line_words)
+        lines.append(f"[{minutes:02d}:{seconds:05.2f}] {line_text}")
+
     return "\n".join(lines)
 
 
