@@ -28,15 +28,21 @@ export const AnimatedCaptions: React.FC<AnimatedCaptionsProps> = ({
   const baseFontSize = brand.fonts.caption_size_px;
   const fontSize = format === 'square_1_1' ? baseFontSize * 0.85 : baseFontSize;
 
-  // Fade in the group
+  // Fade in the group (guard against very short groups where fade ranges overlap)
   const groupStartFrame = activeGroup.start * fps;
   const groupEndFrame = activeGroup.end * fps;
-  const opacity = interpolate(
-    frame,
-    [groupStartFrame, groupStartFrame + 4, groupEndFrame - 3, groupEndFrame],
-    [0, 1, 1, 0],
-    {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}
-  );
+  const groupDuration = groupEndFrame - groupStartFrame;
+  const fadeFrames = Math.min(4, groupDuration / 3);
+
+  let opacity = 1;
+  if (groupDuration > fadeFrames * 2) {
+    opacity = interpolate(
+      frame,
+      [groupStartFrame, groupStartFrame + fadeFrames, groupEndFrame - fadeFrames, groupEndFrame],
+      [0, 1, 1, 0],
+      {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}
+    );
+  }
 
   // Bottom margin adjusts by format
   const marginBottom =

@@ -52,7 +52,11 @@ Examples:
         """
     )
     parser.add_argument("video", help="Path to source video file")
-    parser.add_argument("--render", action="store_true", help="Run render phase (after review)")
+    parser.add_argument("--render", action="store_true", help="Run render phase (cut + render after review)")
+    parser.add_argument("--preview", action="store_true", help="Render at 540p for fast preview (~4x faster)")
+    parser.add_argument("--format", choices=["vertical", "square", "both"], default="vertical",
+                        help="Output format (default: vertical)")
+    parser.add_argument("--concurrency", type=int, default=3, help="Parallel renders (default: 3)")
     parser.add_argument("--skip-layout", action="store_true", help="Skip layout detection")
     parser.add_argument("--step", choices=["transcribe", "layout", "select", "cut", "prepare"],
                         help="Run a single step only")
@@ -181,15 +185,36 @@ Examples:
             print("Render data preparation failed.", file=sys.stderr)
             sys.exit(1)
 
+        # Step 6: Render with Remotion
+        render_data_dir = os.path.join(clips_dir, "render_data")
+        output_dir = str(ROOT / "output" / video_name)
+
+        render_cmd = [
+            "node", str(ROOT / "remotion" / "render.mjs"),
+            "--batch", render_data_dir,
+            "--format", args.format,
+            "--output-dir", output_dir,
+            "--concurrency", str(args.concurrency),
+        ]
+        if args.preview:
+            render_cmd.append("--preview")
+
+        print(f"\n{'='*60}")
+        print(f"  STEP: Render with Remotion")
+        print(f"{'='*60}\n")
+
+        result = subprocess.run(render_cmd, cwd=str(ROOT / "remotion"))
+        if result.returncode != 0:
+            print("Rendering failed.", file=sys.stderr)
+            sys.exit(1)
+
         # Summary
         print("\n" + "=" * 60)
-        print("  DONE")
+        print("  PIPELINE COMPLETE")
         print("=" * 60)
         print(f"\n  Cut clips:    {clips_dir}/")
         print(f"  Render data:  {clips_dir}/render_data/")
-        print()
-        print("  Phase 3 (Remotion rendering) coming soon.")
-        print("  For now, cut clips are ready for manual use or Remotion dev.")
+        print(f"  Final output: {output_dir}/")
         print()
 
 

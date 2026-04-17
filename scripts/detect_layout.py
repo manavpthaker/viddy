@@ -152,14 +152,20 @@ def main():
             data = json.load(f)
             transcript_text = data.get("text", "")
 
+    # Scale sample count with video duration (more samples for longer videos)
+    # 8 samples for <10min, then ~1 per 5 min additional, capped at 20
+    num_samples = args.num_samples
+    if num_samples == 8:  # default, auto-scale
+        num_samples = min(20, max(8, int(duration / 60 / 5) + 8))
+
     # Sample frames evenly across the video, avoiding the very start/end
     margin = min(10, duration * 0.05)
     sample_points = [
-        margin + (duration - 2 * margin) * i / (args.num_samples - 1)
-        for i in range(args.num_samples)
+        margin + (duration - 2 * margin) * i / (num_samples - 1)
+        for i in range(num_samples)
     ]
 
-    print(f"Sampling {args.num_samples} frames across {duration:.0f}s video...")
+    print(f"Sampling {num_samples} frames across {duration:.0f}s video...")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         frame_data = sample_frames(video_path, sample_points, tmpdir)
