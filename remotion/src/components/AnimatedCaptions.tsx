@@ -29,8 +29,10 @@ export const AnimatedCaptions: React.FC<AnimatedCaptionsProps> = ({
   const fontSize = format === 'square_1_1' ? baseFontSize * 0.8 : baseFontSize;
 
   // Caption safe zone: anchor at 60% of frame height
-  // TikTok eats bottom 18% and top 12%
-  const captionTop = Math.round(height * 0.60);
+  // TikTok eats bottom 18%, top 12%. Never below 75%.
+  const captionTop = format === 'square_1_1'
+    ? Math.round(height * 0.70)
+    : Math.round(height * 0.60);
 
   // Spring entrance for the group
   const groupStartFrame = Math.round(activeGroup.start * fps);

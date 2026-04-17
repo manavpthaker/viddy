@@ -18,7 +18,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({config}) => {
     <div
       style={{
         position: 'absolute',
-        top: config.position === 'top' ? (config.top_offset_px || 230) : undefined,
+        top: config.position === 'top' ? (config.top_offset_px || Math.round(height * 0.12)) : undefined,
         bottom: config.position === 'bottom' ? 0 : undefined,
         left: 0,
         right: 0,
