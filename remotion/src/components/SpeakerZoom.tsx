@@ -40,14 +40,15 @@ export const SpeakerZoom: React.FC<SpeakerZoomProps> = ({
   };
 
   // Step 2: Calculate the target translateX based on speaker position
-  const getTargetTranslateX = (position: string): number => {
+  // Must use rendered video dimensions (not source) since translateX operates in rendered space
+  const getTargetTranslateX = (position: string, renderedWidth: number): number => {
     // For vertical format, we need to crop into one side of the widescreen frame
     // Positive translateX shifts video right (showing left side)
     // Negative translateX shifts video left (showing right side)
     if (position === 'left') {
-      return sourceWidth * 0.2;
+      return renderedWidth * 0.2;
     } else if (position === 'right') {
-      return -sourceWidth * 0.2;
+      return -renderedWidth * 0.2;
     }
     return 0; // center
   };
@@ -79,39 +80,7 @@ export const SpeakerZoom: React.FC<SpeakerZoomProps> = ({
     return 0;
   };
 
-  const activePosition = getActiveSpeakerPosition();
-  const targetX = getTargetTranslateX(activePosition);
-  const zoomBoost = getZoomBoost();
-
-  // Step 4: Smooth transition between speaker positions
-  // Find previous and next speaker segments for interpolation
-  let smoothX = targetX;
-  let prevSegEnd = 0;
-  let nextSegStart = 0;
-
-  for (let i = 0; i < speakerTimeline.length; i++) {
-    const seg = speakerTimeline[i];
-    if (currentTime >= seg.from_seconds && currentTime <= seg.to_seconds) {
-      // Check if we're in the transition zone at the start of this segment
-      const transStart = seg.from_seconds;
-      const transEnd = transStart + transitionSeconds;
-
-      if (currentTime < transEnd && i > 0) {
-        const prevPosition = speakerTimeline[i - 1].position;
-        const prevX = getTargetTranslateX(prevPosition);
-        const progress = Easing.inOut(Easing.cubic)(
-          (currentTime - transStart) / transitionSeconds
-        );
-        smoothX = interpolate(progress, [0, 1], [prevX, targetX]);
-      }
-      break;
-    }
-  }
-
-  // Step 5: Calculate final scale (base + zoom emphasis boost)
-  const scale = baseScale + (zoomScale - baseScale) * zoomBoost;
-
-  // Calculate how to fit the source video
+  // Calculate how to fit the source video (needed before speaker tracking)
   const sourceAspect = sourceWidth / sourceHeight;
   const targetAspect = width / height;
 
@@ -125,6 +94,36 @@ export const SpeakerZoom: React.FC<SpeakerZoomProps> = ({
     videoWidth = width;
     videoHeight = width / sourceAspect;
   }
+
+  const activePosition = getActiveSpeakerPosition();
+  const targetX = getTargetTranslateX(activePosition, videoWidth);
+  const zoomBoost = getZoomBoost();
+
+  // Step 4: Smooth transition between speaker positions
+  // Find previous and next speaker segments for interpolation
+  let smoothX = targetX;
+
+  for (let i = 0; i < speakerTimeline.length; i++) {
+    const seg = speakerTimeline[i];
+    if (currentTime >= seg.from_seconds && currentTime <= seg.to_seconds) {
+      // Check if we're in the transition zone at the start of this segment
+      const transStart = seg.from_seconds;
+      const transEnd = transStart + transitionSeconds;
+
+      if (currentTime < transEnd && i > 0) {
+        const prevPosition = speakerTimeline[i - 1].position;
+        const prevX = getTargetTranslateX(prevPosition, videoWidth);
+        const progress = Easing.inOut(Easing.cubic)(
+          (currentTime - transStart) / transitionSeconds
+        );
+        smoothX = interpolate(progress, [0, 1], [prevX, targetX]);
+      }
+      break;
+    }
+  }
+
+  // Step 5: Calculate final scale (base + zoom emphasis boost)
+  const scale = baseScale + (zoomScale - baseScale) * zoomBoost;
 
   return (
     <div

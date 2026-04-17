@@ -13,14 +13,14 @@ Diary of a CEO style shorts. Clean, high-end, minimal. Documentary feel.
 
 ## Typography
 - **Font:** DM Sans (fallback: Inter, Neue Haas Grotesk)
-- **Caption size:** 56-64px
-- **Weight:** 800-900 for active word, 600 for inactive
+- **Caption size:** 64px (configured in brand.json)
+- **Weight:** 800 for active word, 900 for highlight, 600 for inactive
 - **Letter spacing:** -0.02em
 - **Max words visible:** 3-4 at a time
-- **Text color:** #FFFFFF (inactive: rgba(255,255,255,0.5))
+- **Text color:** #FFFFFF (inactive: rgba(255,255,255,0.45))
 - **Highlight color:** #7B9E87 (sage green accent)
-- **Text stroke:** 2px black stroke
-- **Drop shadow:** 0 4px 0 rgba(0,0,0,0.4)
+- **Text stroke:** 6px solid black — heavy stroke for DOAC legibility at 1080p
+- **Drop shadow:** 0 4px 0 rgba(0,0,0,0.5), 0 0 12px rgba(0,0,0,0.4)
 - **NO background box.** Use stroke + shadow for legibility.
 
 ## Caption Safe Zones
@@ -37,10 +37,10 @@ Diary of a CEO style shorts. Clean, high-end, minimal. Documentary feel.
 - All transitions: ease-in-out cubic, 0.3-0.5s
 
 ## Speaker Zoom
-- Base scale: 1.0 (full frame visible, letterboxed to fit vertical)
-- Speaker tracking crop: 1.3-1.4x to fill frame on active speaker
-- Emphasis punch: additional 1.04x on top of tracking crop
+- Base scale: 1.35 (this IS the tracking crop — fills frame on active speaker)
+- Emphasis punch: additional 1.06x on top of base (total ~1.43x, which is intentional)
 - Transition between speakers: 0.4s ease-in-out
+- Note: "no zoom > 1.1x" anti-pattern refers to the emphasis *punch* delta, not total scale
 
 ## Progress Bar
 - Position: top, inside safe zone (below 12% mark = 230px from top)
@@ -49,10 +49,10 @@ Diary of a CEO style shorts. Clean, high-end, minimal. Documentary feel.
 - Background: rgba(255,255,255,0.1)
 
 ## Hook Overlay
-- First 30-45 frames (1-1.5s at 30fps)
+- First 3 seconds (90 frames at 30fps) with fade in/out
 - Most provocative line from the clip
-- Position: 15% from top (safe zone)
-- Font: same as captions, 48-52px
+- Position: 8% from top (safe zone)
+- Font: DM Sans 64px, weight 800 (standalone size, not derived from caption size)
 - Border-left accent: 4px #7B9E87
 - Background: rgba(0,0,0,0.7) with 12px border-radius
 - Enter: slide up 20px + fade in over 10 frames
@@ -69,5 +69,5 @@ Diary of a CEO style shorts. Clean, high-end, minimal. Documentary feel.
 - NO emoji overlays
 - NO colored backgrounds behind captions (use stroke + shadow)
 - NO text below 75% of frame height
-- NO zoom greater than 1.1x (should feel subtle, not jarring)
+- NO emphasis punch greater than 1.1x (the delta, not total scale — should feel subtle)
 - NO hard cuts on speaker switches (always ease transition)

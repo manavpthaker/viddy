@@ -184,7 +184,7 @@ Examples:
         if rc != 0:
             print("Silence trimming failed. Continuing with untrimmed clips.", file=sys.stderr)
 
-        # Step 6: Prepare render data
+        # Step 6: Prepare render data (remaps timestamps if silence was trimmed)
         step_args = [transcript_path, manifest_path]
         if os.path.exists(layout_path):
             step_args += ["--layout", layout_path]
@@ -194,7 +194,7 @@ Examples:
             print("Render data preparation failed.", file=sys.stderr)
             sys.exit(1)
 
-        # Step 6: Render with Remotion
+        # Step 7: Render with Remotion
         render_data_dir = os.path.join(clips_dir, "render_data")
         output_dir = str(ROOT / "output" / video_name)
 

@@ -9,7 +9,7 @@
   "fonts": {
     "caption": "DM Sans",
     "caption_weight": 800,
-    "caption_size_px": 58
+    "caption_size_px": 64
   },
   "caption_position": "safe_zone_center",
   "caption_margin_bottom_px": 180,

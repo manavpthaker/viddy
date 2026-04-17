@@ -124,8 +124,8 @@ export const AnimatedCaptions: React.FC<AnimatedCaptionsProps> = ({
                 transform: `scale(${scale})`,
                 display: 'inline-block',
                 // Stroke + shadow instead of background box
-                WebkitTextStroke: '1.5px rgba(0,0,0,0.8)',
-                textShadow: '0 4px 0 rgba(0,0,0,0.4), 0 0 8px rgba(0,0,0,0.3)',
+                WebkitTextStroke: '6px #000000',
+                textShadow: '0 4px 0 rgba(0,0,0,0.5), 0 0 12px rgba(0,0,0,0.4)',
                 paintOrder: 'stroke fill',
               }}
             >

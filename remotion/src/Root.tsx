@@ -76,41 +76,49 @@ const defaultRenderData: RenderData = {
     height_px: 4,
     color: '#7B9E87',
     bg_color: 'rgba(255,255,255,0.15)',
+    top_offset_px: 230,
   },
 };
 
+interface ClipProps {
+  renderData: RenderData;
+  format: 'vertical_9_16' | 'square_1_1';
+}
+
+const calculateClipMetadata: (props: {props: ClipProps}) => Promise<{
+  durationInFrames: number;
+  fps: number;
+  width: number;
+  height: number;
+}> = async ({props}) => {
+  const {renderData, format} = props;
+  const resolution = renderData.resolutions[format] || (format === 'square_1_1' ? [1080, 1080] : [1080, 1920]);
+  return {
+    durationInFrames: renderData.total_frames || Math.ceil(renderData.duration_seconds * renderData.fps),
+    fps: renderData.fps,
+    width: resolution[0],
+    height: resolution[1],
+  };
+};
+
 export const RemotionRoot: React.FC = () => {
-  // Get render data from input props (passed at render time)
-  const inputProps = getInputProps();
-  const renderData: RenderData = (inputProps as any).renderData || defaultRenderData;
-  const format = ((inputProps as any).format || 'vertical_9_16') as 'vertical_9_16' | 'square_1_1';
-
-  const resolution = renderData.resolutions[format] || [1080, 1920];
-  const [width, height] = resolution;
-
   return (
     <>
       <Composition
         id="ClipVertical"
         component={ClipComposition}
-        durationInFrames={Math.ceil(renderData.duration_seconds * renderData.fps)}
-        fps={renderData.fps}
-        width={1080}
-        height={1920}
+        calculateMetadata={calculateClipMetadata}
         defaultProps={{
-          renderData,
+          renderData: defaultRenderData,
           format: 'vertical_9_16' as const,
         }}
       />
       <Composition
         id="ClipSquare"
         component={ClipComposition}
-        durationInFrames={Math.ceil(renderData.duration_seconds * renderData.fps)}
-        fps={renderData.fps}
-        width={1080}
-        height={1080}
+        calculateMetadata={calculateClipMetadata}
         defaultProps={{
-          renderData,
+          renderData: defaultRenderData,
           format: 'square_1_1' as const,
         }}
       />

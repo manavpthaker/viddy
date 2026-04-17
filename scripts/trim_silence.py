@@ -18,6 +18,7 @@ Output:
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -122,15 +123,36 @@ def trim_clip(video_path: str, keep_segments: list[tuple], output_path: str) -> 
     return result.returncode == 0
 
 
+def save_keep_segments(video_path: str, keep_segments: list[tuple]) -> None:
+    """Save keep_segments alongside the clip so downstream steps can remap timestamps."""
+    segments_path = Path(video_path).with_suffix(".keep_segments.json")
+    data = [{"start": round(s, 4), "end": round(e, 4)} for s, e in keep_segments]
+    with open(segments_path, "w") as f:
+        json.dump(data, f, indent=2)
+
+
 def process_clip(video_path: str, threshold_db: float = -40,
                   min_silence: float = 0.3, air_buffer: float = 0.08) -> dict:
     """Process a single clip: detect silence, trim, save."""
     path = Path(video_path)
 
-    duration_before = get_duration(video_path)
-    silences = detect_silence(video_path, threshold_db, min_silence)
+    # Save original (first time only)
+    original_path = path.with_suffix(".original.mp4")
+    if not original_path.exists():
+        os.rename(video_path, str(original_path))
+        # Copy back so we always have both files
+        shutil.copy2(str(original_path), video_path)
+
+    # Always detect silence from the original (idempotent)
+    source = str(original_path)
+    duration_before = get_duration(source)
+    silences = detect_silence(source, threshold_db, min_silence)
 
     if not silences:
+        # No trim needed — remove any stale keep_segments
+        segments_path = path.with_suffix(".keep_segments.json")
+        if segments_path.exists():
+            segments_path.unlink()
         return {"file": str(path), "silences": 0, "trimmed": False, "reason": "no silence detected"}
 
     keep_segments = build_trim_filter(silences, duration_before, air_buffer)
@@ -141,36 +163,24 @@ def process_clip(video_path: str, threshold_db: float = -40,
 
     # Don't bother if we'd remove less than 0.5s
     if removed < 0.5:
+        segments_path = path.with_suffix(".keep_segments.json")
+        if segments_path.exists():
+            segments_path.unlink()
         return {"file": str(path), "silences": len(silences), "trimmed": False,
                 "reason": f"only {removed:.1f}s silence (below threshold)"}
 
-    # Save original (first time only)
-    original_path = path.with_suffix(".original.mp4")
-    if not original_path.exists():
-        os.rename(video_path, str(original_path))
-    else:
-        # Already have original, just work from the current file
-        original_path_to_use = video_path
-        temp_path = str(path.with_suffix(".trimmed.mp4"))
-        success = trim_clip(video_path, keep_segments, temp_path)
-        if success:
-            os.replace(temp_path, video_path)
-            duration_after = get_duration(video_path)
-            return {"file": str(path), "silences": len(silences), "trimmed": True,
-                    "before": round(duration_before, 1), "after": round(duration_after, 1),
-                    "removed": round(duration_before - duration_after, 1)}
-        return {"file": str(path), "silences": len(silences), "trimmed": False, "reason": "ffmpeg failed"}
-
-    # Trim from original
-    success = trim_clip(str(original_path), keep_segments, video_path)
+    # Always trim from original into the working file
+    success = trim_clip(source, keep_segments, video_path)
     if success:
+        save_keep_segments(video_path, keep_segments)
         duration_after = get_duration(video_path)
         return {"file": str(path), "silences": len(silences), "trimmed": True,
                 "before": round(duration_before, 1), "after": round(duration_after, 1),
                 "removed": round(duration_before - duration_after, 1)}
 
-    # Failed, restore original
-    os.rename(str(original_path), video_path)
+    # Failed — restore original
+    import shutil
+    shutil.copy2(str(original_path), video_path)
     return {"file": str(path), "silences": len(silences), "trimmed": False, "reason": "ffmpeg failed"}
 
 

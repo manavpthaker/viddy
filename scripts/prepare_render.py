@@ -29,6 +29,75 @@ def load_default_config() -> dict:
         return json.load(f)
 
 
+def load_keep_segments(clip_file: str) -> list[tuple[float, float]] | None:
+    """Load keep_segments.json if it exists (written by trim_silence.py)."""
+    segments_path = Path(clip_file).with_suffix(".keep_segments.json")
+    if not segments_path.exists():
+        return None
+    with open(segments_path) as f:
+        data = json.load(f)
+    return [(seg["start"], seg["end"]) for seg in data]
+
+
+def remap_time(t_source: float, keep_segments: list[tuple[float, float]]) -> float | None:
+    """Map a source-timeline timestamp to the trimmed-video timeline.
+
+    Returns None if the timestamp falls in a removed (silent) region.
+    Timestamps at gap boundaries snap to the nearest kept edge.
+    """
+    offset = 0.0
+    for i, (s, e) in enumerate(keep_segments):
+        if t_source < s:
+            # In a gap — snap to the start of this segment
+            return offset
+        if t_source <= e:
+            return (t_source - s) + offset
+        offset += (e - s)
+    # Past all segments — clamp to end of trimmed timeline
+    return offset
+
+
+def remap_caption_groups(groups: list[dict], keep_segments: list[tuple[float, float]]) -> list[dict]:
+    """Remap all caption group and word timestamps through the keep_segments mapping."""
+    remapped = []
+    for group in groups:
+        new_words = []
+        for word in group["words"]:
+            new_start = remap_time(word["start"], keep_segments)
+            new_end = remap_time(word["end"], keep_segments)
+            if new_start is not None and new_end is not None:
+                new_words.append({**word, "start": round(new_start, 3), "end": round(new_end, 3)})
+        if new_words:
+            remapped.append({
+                "text": " ".join(w["word"] for w in new_words),
+                "words": new_words,
+                "start": new_words[0]["start"],
+                "end": new_words[-1]["end"],
+            })
+    return remapped
+
+
+def remap_speaker_timeline(timeline: list[dict], keep_segments: list[tuple[float, float]]) -> list[dict]:
+    """Remap speaker timeline timestamps through keep_segments."""
+    remapped = []
+    for seg in timeline:
+        new_from = remap_time(seg["from_seconds"], keep_segments)
+        new_to = remap_time(seg["to_seconds"], keep_segments)
+        if new_from is not None and new_to is not None:
+            remapped.append({**seg, "from_seconds": round(new_from, 2), "to_seconds": round(new_to, 2)})
+    return remapped
+
+
+def remap_zoom_moments(moments: list[dict], keep_segments: list[tuple[float, float]]) -> list[dict]:
+    """Remap zoom moment timestamps through keep_segments."""
+    remapped = []
+    for zm in moments:
+        new_at = remap_time(zm["at_seconds"], keep_segments)
+        if new_at is not None:
+            remapped.append({**zm, "at_seconds": round(new_at, 2)})
+    return remapped
+
+
 def get_words_for_range(words: list[dict], start: float, end: float, padding: float = 0.5) -> list[dict]:
     """Extract words that fall within a time range."""
     actual_start = max(0, start - padding)
@@ -198,18 +267,29 @@ def main():
         caption_groups = build_caption_groups(words, render_config["words_per_group"])
 
         # Build continuous speaker timeline + zoom emphasis moments
-        duration = (source_end + config["cutting"]["padding_after_seconds"]) - (source_start - padding)
-        speaker_timeline = build_speaker_timeline(clip_data, layout_data, source_start - padding, duration)
+        pre_trim_duration = (source_end + config["cutting"]["padding_after_seconds"]) - (source_start - padding)
+        speaker_timeline = build_speaker_timeline(clip_data, layout_data, source_start - padding, pre_trim_duration)
         zoom_emphasis = build_zoom_moments(clip_data, source_start - padding)
 
-        # Mark highlight words
+        # Mark highlight words (exact match, not substring)
         highlight_words = set(w.lower() for w in clip_data.get("highlight_words", []))
         for group in caption_groups:
             for word in group["words"]:
-                word["highlight"] = any(
-                    hw in word["word"].lower()
-                    for hw in highlight_words
-                )
+                # Strip punctuation for matching
+                clean = word["word"].lower().strip(".,!?;:\"'()-")
+                word["highlight"] = clean in highlight_words
+
+        # Remap timestamps if silence was trimmed
+        keep_segments = load_keep_segments(clip_file)
+        if keep_segments:
+            # Remap all timestamps from source timeline → trimmed timeline
+            caption_groups = remap_caption_groups(caption_groups, keep_segments)
+            speaker_timeline = remap_speaker_timeline(speaker_timeline, keep_segments)
+            zoom_emphasis = remap_zoom_moments(zoom_emphasis, keep_segments)
+            # Use actual trimmed duration
+            duration = sum(e - s for s, e in keep_segments)
+        else:
+            duration = pre_trim_duration
 
         render_data = {
             "clip_number": clip_num,
@@ -247,7 +327,8 @@ def main():
                 "position": "top",
                 "height_px": brand["progress_bar_height_px"],
                 "color": brand["colors"]["progress_bar"],
-                "bg_color": brand["colors"]["progress_bar_bg"]
+                "bg_color": brand["colors"]["progress_bar_bg"],
+                "top_offset_px": brand.get("progress_bar_top_offset_px", 230)
             }
         }
 

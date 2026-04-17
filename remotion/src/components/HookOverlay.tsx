@@ -63,7 +63,7 @@ export const HookOverlay: React.FC<HookOverlayProps> = ({
           style={{
             fontFamily: brand.fonts.caption,
             fontWeight: 800,
-            fontSize: brand.fonts.caption_size_px * 0.55,
+            fontSize: 64,
             color: brand.colors.caption_text,
             lineHeight: 1.3,
             textShadow: '0 1px 4px rgba(0,0,0,0.3)',

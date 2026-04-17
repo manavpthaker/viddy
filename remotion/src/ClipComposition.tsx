@@ -17,9 +17,9 @@ export const ClipComposition: React.FC<ClipCompositionProps> = ({
 }) => {
   const {brand, captions, speaker_tracking, zoom_emphasis, progress_bar, hook} = renderData;
 
-  // Source video dimensions (from the cut clip, same as original)
-  const sourceWidth = 1280;
-  const sourceHeight = 720;
+  // Source video dimensions (Riverside exports at 1920x1080)
+  const sourceWidth = 1920;
+  const sourceHeight = 1080;
 
   // Resolve video source - use staticFile for filenames, pass URLs through
   const videoSrc = renderData.source_video.startsWith('http')
