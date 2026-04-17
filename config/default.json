@@ -1,0 +1,35 @@
+{
+  "transcription": {
+    "provider": "openai",
+    "model": "whisper-1",
+    "language": "en"
+  },
+  "clip_selection": {
+    "model": "claude-sonnet-4-20250514",
+    "max_clips": 7,
+    "min_duration_seconds": 30,
+    "max_duration_seconds": 120,
+    "target_duration_seconds": 75
+  },
+  "layout_detection": {
+    "model": "claude-sonnet-4-20250514",
+    "sample_frames": 6,
+    "detect_screen_share": true
+  },
+  "cutting": {
+    "padding_before_seconds": 0.5,
+    "padding_after_seconds": 0.3,
+    "fade_in_ms": 200,
+    "fade_out_ms": 300
+  },
+  "render": {
+    "formats": ["vertical_9_16", "square_1_1"],
+    "caption_style": "highlight",
+    "words_per_group": 3,
+    "fps": 30,
+    "resolution": {
+      "vertical_9_16": [1080, 1920],
+      "square_1_1": [1080, 1080]
+    }
+  }
+}

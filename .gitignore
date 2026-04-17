@@ -1,0 +1,30 @@
+# Video files (too large for git)
+input/*.mp4
+input/*.mov
+input/*.avi
+input/*.mkv
+input/*.webm
+clips/
+output/
+
+# Audio intermediates
+*.wav
+
+# Python
+__pycache__/
+*.pyc
+.env
+
+# Node (Remotion)
+node_modules/
+remotion/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keep directory structure
+!input/.gitkeep
+!clips/.gitkeep
+!output/.gitkeep
+!review/.gitkeep
