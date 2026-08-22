@@ -28,3 +28,7 @@ Thumbs.db
 !clips/.gitkeep
 !output/.gitkeep
 !review/.gitkeep
+
+# Per-run review artifacts and local agent state
+review/*/
+remotion/.goose/
