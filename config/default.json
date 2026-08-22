@@ -22,6 +22,15 @@
     "fade_in_ms": 200,
     "fade_out_ms": 300
   },
+  "broll": {
+    "enabled": true,
+    "max_suggestions_per_clip": 3,
+    "min_segment_seconds": 3,
+    "max_segment_seconds": 8,
+    "transition_seconds": 0.3,
+    "providers": ["pexels"],
+    "cache_dir": "~/.viddy/broll_cache"
+  },
   "render": {
     "formats": ["vertical_9_16", "square_1_1"],
     "caption_style": "highlight",

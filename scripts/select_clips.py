@@ -86,6 +86,10 @@ FEW_SHOT_EXAMPLE = """
       "zoom_moments": [
         {"at_seconds": 144.0, "target": "speaker_a", "hold_seconds": 5}
       ],
+      "broll_suggestions": [
+        {"search_query": "typing laptop email", "from_seconds": 132.5, "to_seconds": 137.0, "reason": "Speaker describes sending an email — show someone typing"},
+        {"search_query": "linkedin phone screen", "from_seconds": 143.0, "to_seconds": 148.0, "reason": "Speaker pivots to LinkedIn strategy — show the platform in use"}
+      ],
       "suggested_title": "Why LinkedIn beats email for reaching hiring managers",
       "mood": "tactical",
       "formats": ["vertical", "square"]
@@ -120,6 +124,13 @@ Find the {clips_per_window} strongest clip candidates in this transcript window 
 - highlight_words (2-4 key words/phrases for caption emphasis)
 - speaker_timeline (who is speaking and their position, covering the ENTIRE clip)
 - zoom_moments (timestamps for tighter crop during emphasis)
+- broll_suggestions (0-3 moments where stock B-roll video could visually reinforce the topic)
+  - search_query: 2-4 concrete, visual words for stock video search (e.g. "fishing lake boat", NOT abstract like "success")
+  - from_seconds, to_seconds: absolute timestamps, each segment 3-8 seconds
+  - reason: why this B-roll enhances the clip
+  - CRITICAL: from_seconds/to_seconds MUST match the EXACT sentence where the speaker says the words that the B-roll illustrates. Use the transcript timestamps to place B-roll precisely on the relevant phrase, not loosely within the clip.
+  - NEVER suggest B-roll in the first 3 seconds (hook overlay) or last 2 seconds (fade out)
+  - Only suggest B-roll during descriptive/narrative passages, NOT during emotional close-ups
 - suggested_title
 - mood: one of "introspective", "tactical", "emotional", "provocative", "storytelling"
 
@@ -138,6 +149,9 @@ Find the {clips_per_window} strongest clip candidates in this transcript window 
       ],
       "zoom_moments": [
         {{"at_seconds": 0, "target": "speaker_a", "hold_seconds": 5}}
+      ],
+      "broll_suggestions": [
+        {{"search_query": "keyword keyword", "from_seconds": 0, "to_seconds": 0, "reason": ""}}
       ],
       "suggested_title": "",
       "mood": "introspective",

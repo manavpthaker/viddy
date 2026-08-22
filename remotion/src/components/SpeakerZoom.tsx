@@ -46,9 +46,9 @@ export const SpeakerZoom: React.FC<SpeakerZoomProps> = ({
     // Positive translateX shifts video right (showing left side)
     // Negative translateX shifts video left (showing right side)
     if (position === 'left') {
-      return renderedWidth * 0.2;
+      return renderedWidth * 0.25;
     } else if (position === 'right') {
-      return -renderedWidth * 0.2;
+      return -renderedWidth * 0.25;
     }
     return 0; // center
   };
@@ -142,7 +142,7 @@ export const SpeakerZoom: React.FC<SpeakerZoomProps> = ({
           position: 'absolute',
           top: '50%',
           left: '50%',
-          transform: `translate(-50%, -50%) scale(${scale}) translateX(${smoothX}px)`,
+          transform: `translateX(${smoothX}px) translate(-50%, -50%) scale(${scale})`,
           transformOrigin: 'center center',
         }}
       >

@@ -17,35 +17,25 @@ export const AnimatedCaptions: React.FC<AnimatedCaptionsProps> = ({
   const {fps, height} = useVideoConfig();
   const currentTime = frame / fps;
 
-  // Find the active caption group
   const activeGroup = groups.find(
     (g) => currentTime >= g.start && currentTime <= g.end
   );
 
   if (!activeGroup) return null;
 
-  // Scale font size based on format
   const baseFontSize = brand.fonts.caption_size_px;
-  const fontSize = format === 'square_1_1' ? baseFontSize * 0.8 : baseFontSize;
+  const fontSize = format === 'square_1_1' ? baseFontSize * 0.75 : baseFontSize * 0.85;
 
-  // Caption safe zone: anchor at 60% of frame height
-  // TikTok eats bottom 18%, top 12%. Never below 75%.
   const captionTop = format === 'square_1_1'
     ? Math.round(height * 0.70)
     : Math.round(height * 0.60);
 
-  // Spring entrance for the group
   const groupStartFrame = Math.round(activeGroup.start * fps);
-  const enterProgress = spring({
-    frame: frame - groupStartFrame,
-    fps,
-    config: {damping: 14, stiffness: 200, mass: 0.8},
-  });
-
-  // Gentle fade out at end
   const groupEndFrame = Math.round(activeGroup.end * fps);
   const groupDuration = groupEndFrame - groupStartFrame;
-  const fadeOutFrames = Math.min(4, groupDuration / 3);
+
+  // Quick fade out
+  const fadeOutFrames = Math.min(3, groupDuration / 4);
   const fadeOut = groupDuration > fadeOutFrames
     ? interpolate(
         frame,
@@ -54,11 +44,6 @@ export const AnimatedCaptions: React.FC<AnimatedCaptionsProps> = ({
         {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}
       )
     : 1;
-
-  const opacity = Math.min(enterProgress, fadeOut);
-
-  // Slide up entrance
-  const translateY = interpolate(enterProgress, [0, 1], [12, 0]);
 
   return (
     <div
@@ -69,48 +54,55 @@ export const AnimatedCaptions: React.FC<AnimatedCaptionsProps> = ({
         right: 0,
         display: 'flex',
         justifyContent: 'center',
-        opacity,
-        transform: `translateY(${translateY}px)`,
+        opacity: fadeOut,
         zIndex: 10,
       }}
     >
       <div
         style={{
           display: 'flex',
-          gap: fontSize * 0.22,
-          maxWidth: '88%',
+          gap: fontSize * 0.2,
+          maxWidth: '85%',
           flexWrap: 'wrap',
           justifyContent: 'center',
+          alignItems: 'baseline',
         }}
       >
         {activeGroup.words.map((word, i) => {
-          const isActive = currentTime >= word.start && currentTime <= word.end;
-          const isPast = currentTime > word.end;
+          const isActive = currentTime >= word.start;
+          const isCurrentlySpoken = currentTime >= word.start && currentTime <= word.end;
 
-          // Spring entrance per word
           const wordStartFrame = Math.round(word.start * fps);
-          const wordSpring = spring({
-            frame: frame - wordStartFrame,
+          const frameSinceWord = frame - wordStartFrame;
+
+          // Snappy entrance — fast, no bounce
+          const popSpring = spring({
+            frame: frameSinceWord,
             fps,
-            config: {damping: 12, stiffness: 200, mass: 0.6},
+            config: {damping: 22, stiffness: 300, mass: 0.4},
           });
 
-          // Scale: subtle 1.08x on active, 1.15x on highlight
-          const baseScale = word.highlight && isActive ? 1.15 : isActive ? 1.08 : 1;
-          const scale = interpolate(wordSpring, [0, 1], [0.9, baseScale]);
+          // Clean scale: appear at 0.85 → 1.0, no overshoot
+          const scale = isActive
+            ? interpolate(popSpring, [0, 1], [0.85, 1.0])
+            : 0;
 
-          // Color
-          const wordColor = word.highlight
-            ? brand.colors.caption_highlight
-            : isActive || isPast
-              ? brand.colors.caption_text
-              : 'rgba(255, 255, 255, 0.45)';
+          // Minimal Y shift — just 6px, fast settle
+          const translateY = interpolate(popSpring, [0, 1], [6, 0]);
 
-          const weight = word.highlight
-            ? 900
+          const opacity = isActive
+            ? interpolate(popSpring, [0, 0.2], [0, 1], {extrapolateRight: 'clamp'})
+            : 0;
+
+          // Active word: full white. Past: slightly dimmed. Inactive: hidden
+          const wordColor = isCurrentlySpoken
+            ? '#FFFFFF'
             : isActive
-              ? brand.fonts.caption_weight
-              : 600;
+              ? 'rgba(255, 255, 255, 0.7)'
+              : 'rgba(255, 255, 255, 0.3)';
+
+          // Spoken word gets a subtle underline accent via border
+          const weight = isCurrentlySpoken ? 700 : 600;
 
           return (
             <span
@@ -119,13 +111,13 @@ export const AnimatedCaptions: React.FC<AnimatedCaptionsProps> = ({
                 fontFamily: brand.fonts.caption,
                 fontWeight: weight,
                 fontSize,
-                letterSpacing: '-0.02em',
+                letterSpacing: '-0.01em',
                 color: wordColor,
-                transform: `scale(${scale})`,
+                transform: `scale(${scale}) translateY(${isActive ? translateY : 0}px)`,
+                opacity: isActive ? opacity : 0,
                 display: 'inline-block',
-                // Stroke + shadow instead of background box
-                WebkitTextStroke: '6px #000000',
-                textShadow: '0 4px 0 rgba(0,0,0,0.5), 0 0 12px rgba(0,0,0,0.4)',
+                WebkitTextStroke: '4px #000000',
+                textShadow: '0 2px 0 rgba(0,0,0,0.5), 0 0 8px rgba(0,0,0,0.3)',
                 paintOrder: 'stroke fill',
               }}
             >

@@ -176,13 +176,32 @@ Options:
   // Copy ALL clip videos to public/ BEFORE bundling
   // Remotion bundles the public dir at bundle time, so files must exist then
   console.log('Copying clip videos to public/...');
+  const brollFilesCopied = new Set();
   for (const {data} of allRenderData) {
     const clipNum = String(data.clip_number).padStart(2, '0');
     const videoFilename = `clip_${clipNum}.mp4`;
     const dest = resolve(publicDir, videoFilename);
     copyFileSync(data.source_video, dest);
+
+    // Copy B-roll videos and rewrite paths to filenames
+    if (data.broll?.segments) {
+      for (const seg of data.broll.segments) {
+        const brollFilename = `broll_${basename(seg.source_video)}`;
+        const brollDest = resolve(publicDir, brollFilename);
+        if (!brollFilesCopied.has(brollFilename)) {
+          try {
+            copyFileSync(seg.source_video, brollDest);
+            brollFilesCopied.add(brollFilename);
+          } catch (err) {
+            console.warn(`  Warning: could not copy B-roll ${seg.source_video}: ${err.message}`);
+          }
+        }
+        seg.source_video = brollFilename;
+      }
+    }
   }
-  console.log(`  ${allRenderData.length} clips copied\n`);
+  const brollMsg = brollFilesCopied.size > 0 ? `, ${brollFilesCopied.size} B-roll files` : '';
+  console.log(`  ${allRenderData.length} clips copied${brollMsg}\n`);
 
   // Bundle once — this is the expensive webpack step
   const bundleStart = Date.now();
@@ -237,6 +256,9 @@ Options:
     const clipNum = String(data.clip_number).padStart(2, '0');
     const videoFilename = `clip_${clipNum}.mp4`;
     try { unlinkSync(resolve(publicDir, videoFilename)); } catch {}
+  }
+  for (const brollFilename of brollFilesCopied) {
+    try { unlinkSync(resolve(publicDir, brollFilename)); } catch {}
   }
 
   const totalTime = ((Date.now() - totalStart) / 1000).toFixed(1);

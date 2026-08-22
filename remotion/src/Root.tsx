@@ -1,7 +1,45 @@
 import React from 'react';
 import {Composition, getInputProps} from 'remotion';
 import {ClipComposition} from './ClipComposition';
+import {BlueprintComposition, type BlueprintRenderData} from './BlueprintComposition';
 import type {RenderData} from './types';
+
+// Minimal default for Blueprint studio preview (real props come via --props)
+const defaultBlueprintData: BlueprintRenderData = {
+  slug: 'preview',
+  title: 'Blueprint Preview',
+  duration_seconds: 10,
+  fps: 30,
+  total_frames: 300,
+  resolution: [1920, 1080],
+  sections: [
+    {
+      id: 'hook',
+      start: 0,
+      duration: 10,
+      audio: '',
+      beats: [
+        {
+          beat: 1,
+          start: 0,
+          end: 10,
+          asset: {type: 'slide', title: 'This is a preview slide', bullets: ['Point one', 'Point two', 'Point three']},
+        },
+      ],
+    },
+  ],
+  captions: {groups: [], style: 'highlight', words_per_group: 4},
+  brand: {
+    colors: {
+      background: '#000000',
+      caption_text: '#FFFFFF',
+      caption_highlight: '#7B9E87',
+      progress_bar: '#7B9E87',
+      progress_bar_bg: 'rgba(255,255,255,0.1)',
+    },
+    fonts: {caption: 'DM Sans', caption_weight: 800, caption_size_px: 64},
+  },
+};
 
 // Default render data for Remotion Studio preview
 const defaultRenderData: RenderData = {
@@ -121,6 +159,18 @@ export const RemotionRoot: React.FC = () => {
           renderData: defaultRenderData,
           format: 'square_1_1' as const,
         }}
+      />
+      <Composition
+        id="Blueprint"
+        component={BlueprintComposition}
+        calculateMetadata={async ({props}) => ({
+          durationInFrames:
+            props.renderData.total_frames || Math.ceil(props.renderData.duration_seconds * props.renderData.fps),
+          fps: props.renderData.fps,
+          width: props.renderData.resolution?.[0] ?? 1920,
+          height: props.renderData.resolution?.[1] ?? 1080,
+        })}
+        defaultProps={{renderData: defaultBlueprintData}}
       />
     </>
   );

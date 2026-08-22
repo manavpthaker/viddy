@@ -1,5 +1,5 @@
 import React from 'react';
-import {useCurrentFrame, useVideoConfig} from 'remotion';
+import {useCurrentFrame, useVideoConfig, interpolate} from 'remotion';
 import type {ProgressBarConfig} from '../types';
 
 interface ProgressBarProps {
@@ -8,23 +8,28 @@ interface ProgressBarProps {
 
 export const ProgressBar: React.FC<ProgressBarProps> = ({config}) => {
   const frame = useCurrentFrame();
-  const {durationInFrames, height: videoHeight} = useVideoConfig();
+  const {durationInFrames, fps} = useVideoConfig();
 
   if (!config.enabled) return null;
 
   const progress = frame / durationInFrames;
 
+  // Fade in during first 0.5s
+  const opacity = interpolate(frame, [0, fps * 0.5], [0, 1], {
+    extrapolateRight: 'clamp',
+  });
+
   return (
     <div
       style={{
         position: 'absolute',
-        top: config.position === 'top' ? (config.top_offset_px || Math.round(videoHeight * 0.12)) : undefined,
-        bottom: config.position === 'bottom' ? 0 : undefined,
+        bottom: 0,
         left: 0,
         right: 0,
         height: config.height_px,
         backgroundColor: config.bg_color,
         zIndex: 20,
+        opacity,
       }}
     >
       <div
@@ -32,7 +37,8 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({config}) => {
           height: '100%',
           width: `${progress * 100}%`,
           backgroundColor: config.color,
-          borderRadius: config.position === 'top' ? '0 0 2px 0' : '0 2px 0 0',
+          borderRadius: '0 2px 2px 0',
+          boxShadow: `0 0 6px ${config.color}50`,
         }}
       />
     </div>

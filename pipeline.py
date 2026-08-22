@@ -59,7 +59,8 @@ Examples:
     parser.add_argument("--concurrency", type=int, default=3, help="Parallel renders (default: 3)")
     parser.add_argument("--context", help="Path to episode context JSON (default: config/episode.json)")
     parser.add_argument("--skip-layout", action="store_true", help="Skip layout detection")
-    parser.add_argument("--step", choices=["transcribe", "layout", "select", "cut", "prepare"],
+    parser.add_argument("--skip-broll", action="store_true", help="Skip B-roll fetch")
+    parser.add_argument("--step", choices=["transcribe", "layout", "select", "broll", "cut", "prepare"],
                         help="Run a single step only")
     parser.add_argument("--output-name", help="Override the output folder name")
     args = parser.parse_args()
@@ -90,6 +91,9 @@ Examples:
             if os.path.exists(layout_path):
                 step_args += ["--layout", layout_path]
             sys.exit(run_step("select_clips.py", step_args, "Select Clips"))
+        elif args.step == "broll":
+            step_args = [clips_json_path, "--output-dir", review_dir]
+            sys.exit(run_step("fetch_broll.py", step_args, "Fetch B-Roll"))
         elif args.step == "cut":
             sys.exit(run_step("cut_clips.py", [video_path, clips_json_path], "Cut Clips"))
         elif args.step == "prepare":
@@ -135,15 +139,32 @@ Examples:
             print("Clip selection failed.", file=sys.stderr)
             sys.exit(1)
 
+        # Step 3b: Fetch B-roll suggestions
+        if not args.skip_broll:
+            broll_args = [clips_json_path, "--output-dir", review_dir]
+            rc = run_step("fetch_broll.py", broll_args, "Fetch B-Roll")
+            if rc != 0:
+                print("B-roll fetch failed. Continuing without B-roll.", file=sys.stderr)
+        else:
+            print("\nSkipping B-roll fetch (--skip-broll)")
+
         # Pause for review
         print("\n" + "=" * 60)
         print("  REVIEW YOUR CLIPS")
         print("=" * 60)
         print(f"\n  Review file:  {review_dir}/review.md")
         print(f"  Clips data:   {review_dir}/clips.json")
+        broll_path = os.path.join(review_dir, "broll.json")
+        if os.path.exists(broll_path):
+            print(f"  B-roll data:  {broll_path}")
         print()
         print("  To approve/reject clips, edit clips.json:")
         print('    Set "approved": false on clips you don\'t want.')
+        if os.path.exists(broll_path):
+            print()
+            print("  To customize B-roll, edit broll.json:")
+            print('    Set "approved": false on B-roll segments you don\'t want.')
+            print('    Swap "selected_video" with an "alternative" to change the clip.')
         print()
         print("  When ready, run:")
         print(f"    python pipeline.py {args.video} --render")
@@ -188,6 +209,7 @@ Examples:
         step_args = [transcript_path, manifest_path]
         if os.path.exists(layout_path):
             step_args += ["--layout", layout_path]
+        step_args += ["--broll-dir", review_dir]
         step_args += ["--output-dir", os.path.join(clips_dir, "render_data")]
         rc = run_step("prepare_render.py", step_args, "Prepare Render Data")
         if rc != 0:

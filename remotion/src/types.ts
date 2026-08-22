@@ -55,6 +55,15 @@ export interface ProgressBarConfig {
   top_offset_px?: number;
 }
 
+export interface BRollSegment {
+  id: string;
+  source_video: string;
+  from_seconds: number;
+  to_seconds: number;
+  source_start_seconds: number;
+  transition_seconds: number;
+}
+
 export interface RenderData {
   clip_number: number;
   source_video: string;
@@ -81,4 +90,8 @@ export interface RenderData {
   };
   brand: BrandConfig;
   progress_bar: ProgressBarConfig;
+  broll?: {
+    segments: BRollSegment[];
+    enabled: boolean;
+  };
 }

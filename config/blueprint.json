@@ -1,0 +1,59 @@
+{
+  "channel": {
+    "name": "The Operator Economy",
+    "tagline": "Build. Own. Operate.",
+    "handle": "@operatoreconomy",
+    "domain": "theoperatoreconomy.com",
+    "positioning": "AI businesses for people done with the broken job market",
+    "audience": "Senior professionals in career transition; builders who want income outside employment",
+    "tone": "Clean, high-end, minimal. Documentary rigor, operator credibility. Respectful, not hype. Never promise income — show sourced numbers.",
+    "cta": {
+      "lead_magnet": "Downloadable blueprint doc (email capture)",
+      "secondary": "grapevines.ai/intel"
+    }
+  },
+  "format": {
+    "target_duration_minutes": 10,
+    "note": "Thesis-led episodes: 'this is the kind of business you can build' — not company deep-dives. Companies are evidence inside the thesis, spanning the LOW END (solo/side version) to the HIGH END (venture-scale version).",
+    "sections": [
+      {"id": "hook", "purpose": "The thesis in one line + the range: what the low-end solo version realistically makes vs what the high-end company built. <=15s.", "target_seconds": 15},
+      {"id": "thesis", "purpose": "The kind of business this is, who it serves, why AI makes it buildable by one person now, and what 'built' looks like at different effort levels.", "target_seconds": 75},
+      {"id": "evidence", "purpose": "Low end AND high end, with sourced numbers: a solo/small operator actually doing this (best-case case study) and the venture-scale version proving the market. Mini-breakdowns, not full company docs.", "target_seconds": 180},
+      {"id": "stack", "purpose": "The exact tool stack: what each tool does, cost, alternatives.", "target_seconds": 120},
+      {"id": "playbook", "purpose": "Step-by-step build plan: week 1, month 1, first customer/dollar.", "target_seconds": 150},
+      {"id": "economics", "purpose": "The honest output: realistic ranges by effort level, what it diversifies (income, skills, optionality), costs, failure modes.", "target_seconds": 90},
+      {"id": "cta", "purpose": "Blueprint download + subscribe. One sentence each.", "target_seconds": 20}
+    ]
+  },
+  "models": {
+    "script": "claude-sonnet-4-20250514",
+    "assets": "claude-sonnet-4-20250514",
+    "derive": "claude-sonnet-4-20250514"
+  },
+  "voiceover": {
+    "provider": "elevenlabs",
+    "voice_id": "SET_ME",
+    "model_id": "eleven_multilingual_v2",
+    "stability": 0.5,
+    "similarity_boost": 0.75,
+    "output_format": "mp3_44100_128"
+  },
+  "render": {
+    "format": "wide_16_9",
+    "resolution": [1920, 1080],
+    "fps": 30,
+    "caption_style": "highlight",
+    "words_per_group": 4
+  },
+  "derivation": {
+    "linkedin_posts": 3,
+    "newsletter": true,
+    "blueprint_doc": true,
+    "shorts_briefs": 4,
+    "linkedin_themes": ["Career as Product", "The Broken Market", "Building with AI", "Founder/Personal"]
+  },
+  "compliance": {
+    "ai_disclosure": true,
+    "notes": "Human POV pass required at Gate 1. Never publish an unedited AI script (YouTube inauthentic content policy, Jan 2026 AI disclosure rules)."
+  }
+}

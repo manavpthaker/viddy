@@ -11,6 +11,8 @@ Output:
     clips/<video_name>/render_data/clip_01.json, clip_02.json, etc.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -96,6 +98,61 @@ def remap_zoom_moments(moments: list[dict], keep_segments: list[tuple[float, flo
         if new_at is not None:
             remapped.append({**zm, "at_seconds": round(new_at, 2)})
     return remapped
+
+
+def remap_broll_segments(segments: list[dict], keep_segments: list[tuple[float, float]]) -> list[dict]:
+    """Remap B-roll segment timestamps through keep_segments."""
+    remapped = []
+    for seg in segments:
+        new_from = remap_time(seg["from_seconds"], keep_segments)
+        new_to = remap_time(seg["to_seconds"], keep_segments)
+        if new_from is not None and new_to is not None and new_to > new_from:
+            remapped.append({**seg, "from_seconds": round(new_from, 2), "to_seconds": round(new_to, 2)})
+    return remapped
+
+
+def load_broll_data(review_dir: str) -> dict | None:
+    """Load broll.json if it exists."""
+    broll_path = Path(review_dir) / "broll.json"
+    if not broll_path.exists():
+        return None
+    with open(broll_path) as f:
+        return json.load(f)
+
+
+def get_broll_for_clip(broll_data: dict, clip_rank: int, clip_start_offset: float) -> list[dict]:
+    """Extract approved B-roll segments for a specific clip, with clip-relative timestamps."""
+    if not broll_data:
+        return []
+
+    segments = []
+    for clip_broll in broll_data.get("clips", []):
+        if clip_broll.get("clip_rank") != clip_rank:
+            continue
+        for suggestion in clip_broll.get("suggestions", []):
+            if not suggestion.get("approved", False):
+                continue
+            selected = suggestion.get("selected_video")
+            if not selected or not selected.get("local_path"):
+                continue
+
+            # Convert absolute timestamps to clip-relative
+            from_s = suggestion["from_seconds"] - clip_start_offset
+            to_s = suggestion["to_seconds"] - clip_start_offset
+
+            if to_s <= from_s:
+                continue
+
+            segments.append({
+                "id": suggestion["id"],
+                "source_video": selected["local_path"],
+                "from_seconds": round(max(0, from_s), 2),
+                "to_seconds": round(to_s, 2),
+                "source_start_seconds": 0,
+                "transition_seconds": 0.3,
+            })
+
+    return segments
 
 
 def get_words_for_range(words: list[dict], start: float, end: float, padding: float = 0.5) -> list[dict]:
@@ -224,6 +281,7 @@ def main():
     parser.add_argument("transcript", help="Path to transcript.json")
     parser.add_argument("manifest", help="Path to clips manifest.json")
     parser.add_argument("--layout", help="Path to layout.json")
+    parser.add_argument("--broll-dir", help="Directory containing broll.json (default: same as transcript)")
     parser.add_argument("--output-dir", help="Output directory for render data")
     args = parser.parse_args()
 
@@ -238,6 +296,16 @@ def main():
     if args.layout and os.path.exists(args.layout):
         with open(args.layout) as f:
             layout_data = json.load(f)
+
+    # Load B-roll data
+    broll_dir = args.broll_dir or str(Path(args.transcript).parent)
+    broll_data = load_broll_data(broll_dir)
+    if broll_data:
+        total_broll = sum(
+            len([s for s in c.get("suggestions", []) if s.get("approved")])
+            for c in broll_data.get("clips", [])
+        )
+        print(f"  B-roll data loaded: {total_broll} approved segments")
 
     brand = load_brand_config()
     config = load_default_config()
@@ -279,6 +347,10 @@ def main():
                 clean = word["word"].lower().strip(".,!?;:\"'()-")
                 word["highlight"] = clean in highlight_words
 
+        # Build B-roll segments
+        clip_rank = clip_data.get("rank", clip_num)
+        broll_segments = get_broll_for_clip(broll_data, clip_rank, source_start - padding)
+
         # Remap timestamps if silence was trimmed
         keep_segments = load_keep_segments(clip_file)
         if keep_segments:
@@ -286,6 +358,7 @@ def main():
             caption_groups = remap_caption_groups(caption_groups, keep_segments)
             speaker_timeline = remap_speaker_timeline(speaker_timeline, keep_segments)
             zoom_emphasis = remap_zoom_moments(zoom_emphasis, keep_segments)
+            broll_segments = remap_broll_segments(broll_segments, keep_segments)
             # Use actual trimmed duration
             duration = sum(e - s for s, e in keep_segments)
         else:
@@ -329,6 +402,11 @@ def main():
                 "color": brand["colors"]["progress_bar"],
                 "bg_color": brand["colors"]["progress_bar_bg"],
                 "top_offset_px": brand.get("progress_bar_top_offset_px", 230)
+            },
+
+            "broll": {
+                "segments": broll_segments,
+                "enabled": len(broll_segments) > 0
             }
         }
 
@@ -336,7 +414,9 @@ def main():
         with open(output_path, "w") as f:
             json.dump(render_data, f, indent=2)
 
-        print(f"  Clip {clip_num}: {len(caption_groups)} caption groups, {len(speaker_timeline)} speaker segments, {len(zoom_emphasis)} zoom points")
+        broll_count = len(broll_segments)
+        broll_str = f", {broll_count} B-roll segments" if broll_count else ""
+        print(f"  Clip {clip_num}: {len(caption_groups)} caption groups, {len(speaker_timeline)} speaker segments, {len(zoom_emphasis)} zoom points{broll_str}")
 
     print(f"\nRender data saved to {output_dir}/")
     print("Next: Run Remotion to render final clips.")

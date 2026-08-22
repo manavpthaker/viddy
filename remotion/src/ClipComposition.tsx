@@ -2,6 +2,7 @@ import React from 'react';
 import {AbsoluteFill, staticFile} from 'remotion';
 import {AnimatedCaptions} from './components/AnimatedCaptions';
 import {SpeakerZoom} from './components/SpeakerZoom';
+import {BRollOverlay} from './components/BRollOverlay';
 import {ProgressBar} from './components/ProgressBar';
 import {HookOverlay} from './components/HookOverlay';
 import type {RenderData} from './types';
@@ -41,17 +42,22 @@ export const ClipComposition: React.FC<ClipCompositionProps> = ({
         sourceHeight={sourceHeight}
       />
 
-      {/* Layer 2: Hook text overlay (first 3 seconds) */}
+      {/* Layer 2: B-roll overlay (crossfades over speaker at specific moments) */}
+      {renderData.broll?.enabled && renderData.broll.segments.length > 0 && (
+        <BRollOverlay segments={renderData.broll.segments} format={format} />
+      )}
+
+      {/* Layer 3: Hook text overlay (first 3 seconds) */}
       {hook && <HookOverlay text={hook} brand={brand} displayDuration={3} />}
 
-      {/* Layer 3: Animated captions */}
+      {/* Layer 4: Animated captions */}
       <AnimatedCaptions
         groups={captions.groups}
         brand={brand}
         format={format}
       />
 
-      {/* Layer 4: Progress bar */}
+      {/* Layer 5: Progress bar */}
       <ProgressBar config={progress_bar} />
     </AbsoluteFill>
   );
