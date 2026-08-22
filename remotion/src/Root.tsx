@@ -1,5 +1,5 @@
 import React from 'react';
-import {Composition, getInputProps} from 'remotion';
+import {Composition, type AnyZodObject, type CalculateMetadataFunction} from 'remotion';
 import {ClipComposition} from './ClipComposition';
 import {BlueprintComposition, type BlueprintRenderData} from './BlueprintComposition';
 import type {RenderData} from './types';
@@ -118,17 +118,14 @@ const defaultRenderData: RenderData = {
   },
 };
 
-interface ClipProps {
+type ClipProps = {
   renderData: RenderData;
   format: 'vertical_9_16' | 'square_1_1';
-}
+};
 
-const calculateClipMetadata: (props: {props: ClipProps}) => Promise<{
-  durationInFrames: number;
-  fps: number;
-  width: number;
-  height: number;
-}> = async ({props}) => {
+type BlueprintProps = {renderData: BlueprintRenderData};
+
+const calculateClipMetadata: CalculateMetadataFunction<ClipProps> = async ({props}) => {
   const {renderData, format} = props;
   const resolution = renderData.resolutions[format] || (format === 'square_1_1' ? [1080, 1080] : [1080, 1920]);
   return {
@@ -142,7 +139,7 @@ const calculateClipMetadata: (props: {props: ClipProps}) => Promise<{
 export const RemotionRoot: React.FC = () => {
   return (
     <>
-      <Composition
+      <Composition<AnyZodObject, ClipProps>
         id="ClipVertical"
         component={ClipComposition}
         calculateMetadata={calculateClipMetadata}
@@ -151,7 +148,7 @@ export const RemotionRoot: React.FC = () => {
           format: 'vertical_9_16' as const,
         }}
       />
-      <Composition
+      <Composition<AnyZodObject, ClipProps>
         id="ClipSquare"
         component={ClipComposition}
         calculateMetadata={calculateClipMetadata}
@@ -160,7 +157,7 @@ export const RemotionRoot: React.FC = () => {
           format: 'square_1_1' as const,
         }}
       />
-      <Composition
+      <Composition<AnyZodObject, BlueprintProps>
         id="Blueprint"
         component={BlueprintComposition}
         calculateMetadata={async ({props}) => ({
