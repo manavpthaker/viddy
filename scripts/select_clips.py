@@ -150,7 +150,79 @@ Find the {clips_per_window} strongest clip candidates in this transcript window 
 {transcript}"""
 
 
-# ── Global ranking prompt (for windowed mode) ──
+# ── Virality rubric ──
+# Each candidate is scored 0-10 per dimension; Python computes the weighted
+# 0-100 total (we never trust the model's arithmetic). Tune weights here.
+
+RUBRIC = [
+    {"key": "hook", "label": "Hook", "weight": 2.0,
+     "desc": "Does the FIRST line stop the scroll? Curiosity gap, bold claim, pattern interrupt, or emotional jolt in the opening seconds."},
+    {"key": "emotion", "label": "Emotional charge", "weight": 1.5,
+     "desc": "Vulnerability, conviction, tension, surprise, or raw honesty. Flat/neutral delivery scores low."},
+    {"key": "self_contained", "label": "Self-contained", "weight": 1.5,
+     "desc": "Understandable cold with ZERO context. References to 'what I said earlier' or unexplained names score near 0."},
+    {"key": "payoff", "label": "Payoff / arc", "weight": 1.5,
+     "desc": "A setup that resolves into a punchline or realization INSIDE the clip. Rambling with no landing scores low."},
+    {"key": "quotability", "label": "Quotability", "weight": 1.5,
+     "desc": "Is there one sentence someone would screenshot, repost, or put in a comment?"},
+    {"key": "specificity", "label": "Specificity", "weight": 1.0,
+     "desc": "Concrete numbers, names, vivid detail, a real story — vs vague generic advice."},
+    {"key": "contrarian", "label": "Contrarian", "weight": 1.0,
+     "desc": "Challenges conventional wisdom or says the quiet part out loud. Drives COMMENTS/debate."},
+    {"key": "practical", "label": "Practical value", "weight": 1.0,
+     "desc": "A takeaway the viewer can act on. Drives SAVES."},
+    {"key": "relatability", "label": "Relatability", "weight": 1.0,
+     "desc": "'This is so me' / identity or tribe signal. Drives SHARES."},
+]
+
+MAX_WEIGHTED = sum(d["weight"] for d in RUBRIC) * 10  # 120 with defaults
+
+ENGAGEMENT_DRIVERS = ["share", "save", "comment", "watch_through"]
+
+
+def _rubric_for_prompt() -> str:
+    return "\n".join(
+        f"- {d['key']} (weight {d['weight']}): {d['label']} — {d['desc']}"
+        for d in RUBRIC
+    )
+
+
+SCORING_SYSTEM = """You are a short-form virality analyst. You grade clip candidates against a fixed rubric with cold, calibrated scores. You do NOT inflate — a 10 is rare and means best-in-class. Most real clips land 4-7 on most dimensions.
+
+You ONLY output valid JSON. No markdown, no commentary outside the JSON."""
+
+
+SCORING_PROMPT = """Score each clip candidate against this virality rubric. Each dimension is 0-10.
+
+**Rubric:**
+{rubric}
+
+**Scoring discipline:**
+- Be calibrated, not generous. Reserve 9-10 for genuinely exceptional. A forgettable-but-fine clip is ~5.
+- Judge from the actual transcript excerpt, not just the hook line.
+- predicted_driver: which ONE of {drivers} this clip is most likely to drive.
+- disqualifiers: list any fatal flaws (starts mid-thought, needs prior context, no payoff, inside-baseball). Empty list if none.
+
+{context_block}
+
+**Candidates:**
+{candidates_json}
+
+Return ONLY this JSON:
+{{
+  "scores": [
+    {{
+      "id": 0,
+      "subscores": {{ {subscore_keys} }},
+      "predicted_driver": "share",
+      "rationale": "one sentence on why it will or won't perform",
+      "disqualifiers": []
+    }}
+  ]
+}}"""
+
+
+# ── Global ranking prompt (legacy fallback if scoring is unavailable) ──
 
 RANKING_PROMPT = """You have {total_candidates} clip candidates from different sections of a podcast. Rank them and select the top {max_clips}.
 
@@ -457,6 +529,116 @@ def parse_claude_json(text: str) -> dict:
     return result
 
 
+def get_excerpt(transcript_data: dict, start: float, end: float, max_chars: int = 900) -> str:
+    """Plain-text transcript between start and end, for scoring."""
+    words = transcript_data.get("words", [])
+    if words:
+        text = " ".join(
+            w["word"] for w in words
+            if w["start"] >= start - 0.5 and w["end"] <= end + 0.5
+        )
+    else:
+        text = " ".join(
+            seg["text"].strip() for seg in transcript_data.get("segments", [])
+            if seg["end"] >= start and seg["start"] <= end
+        )
+    text = " ".join(text.split())
+    return text[:max_chars]
+
+
+def compute_weighted_score(subscores: dict) -> int:
+    """Weighted 0-100 from per-dimension 0-10 subscores (computed in Python)."""
+    total = 0.0
+    for d in RUBRIC:
+        v = subscores.get(d["key"], 0)
+        try:
+            v = max(0.0, min(10.0, float(v)))
+        except (TypeError, ValueError):
+            v = 0.0
+        total += v * d["weight"]
+    return round(total / MAX_WEIGHTED * 100)
+
+
+def score_clips(candidates: list[dict], transcript_data: dict, config: dict,
+                episode_context: dict = None) -> list[dict]:
+    """Score every candidate against the rubric and return them ranked by score.
+
+    Advisory by default (nothing dropped). If config.clip_selection.min_score is
+    set, candidates below it are marked approved=false (kept, not removed).
+    On any failure, returns candidates unchanged so the pipeline still works.
+    """
+    if not candidates:
+        return candidates
+
+    clip_config = config["clip_selection"]
+    min_score = clip_config.get("min_score")  # None = advisory
+
+    # Build a compact, id-tagged payload for the scorer.
+    payload = []
+    for i, c in enumerate(candidates):
+        start = c.get("start_seconds", 0)
+        end = c.get("end_seconds", 0)
+        payload.append({
+            "id": i,
+            "hook": c.get("hook", ""),
+            "suggested_title": c.get("suggested_title", ""),
+            "excerpt": get_excerpt(transcript_data, start, end),
+        })
+
+    subscore_keys = ", ".join(f'"{d["key"]}": 0' for d in RUBRIC)
+    prompt = SCORING_PROMPT.format(
+        rubric=_rubric_for_prompt(),
+        drivers=", ".join(ENGAGEMENT_DRIVERS),
+        context_block=build_context_block(episode_context),
+        candidates_json=json.dumps(payload, indent=2),
+        subscore_keys=subscore_keys,
+    )
+
+    print(f"  Scoring {len(candidates)} candidates against the virality rubric...")
+    try:
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model=clip_config["model"],
+            max_tokens=4000,
+            system=SCORING_SYSTEM,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        result = parse_claude_json(response.content[0].text)
+        scores_by_id = {s["id"]: s for s in result.get("scores", []) if "id" in s}
+    except Exception as e:
+        print(f"  Warning: scoring failed ({e}); keeping unscored order.", file=sys.stderr)
+        return candidates
+
+    for i, c in enumerate(candidates):
+        s = scores_by_id.get(i)
+        if not s:
+            c["virality"] = {"score": 0, "subscores": {}, "predicted_driver": None,
+                             "rationale": "not scored", "disqualifiers": []}
+            continue
+        subscores = s.get("subscores", {})
+        score = compute_weighted_score(subscores)
+        c["virality"] = {
+            "score": score,
+            "subscores": subscores,
+            "predicted_driver": s.get("predicted_driver"),
+            "rationale": s.get("rationale", ""),
+            "disqualifiers": s.get("disqualifiers", []),
+        }
+
+    # Rank by score (advisory — keep everything, sorted strongest-first).
+    candidates.sort(key=lambda c: c.get("virality", {}).get("score", 0), reverse=True)
+    for rank, c in enumerate(candidates, 1):
+        c["rank"] = rank
+        score = c.get("virality", {}).get("score", 0)
+        if min_score is not None and score < min_score:
+            c["approved"] = False
+
+    top = candidates[0]["virality"]["score"] if candidates else 0
+    print(f"  Scored. Top clip: {top}/100" +
+          (f" (gate: <{min_score} marked not-approved)" if min_score is not None else " (advisory)"))
+    return candidates
+
+
 def generate_review_md(clips_data: dict, transcript_data: dict) -> str:
     """Generate a human-readable review file."""
     lines = [
@@ -487,11 +669,34 @@ def generate_review_md(clips_data: dict, transcript_data: dict) -> str:
         mood = clip.get("mood", "")
         mood_str = f" [{mood}]" if mood else ""
 
-        lines.append(f"## Clip {rank}: {clip.get('suggested_title', 'Untitled')}{mood_str}")
+        vir = clip.get("virality", {})
+        score = vir.get("score")
+        score_str = f" — 🔥 {score}/100" if score is not None else ""
+
+        lines.append(f"## Clip {rank}: {clip.get('suggested_title', 'Untitled')}{mood_str}{score_str}")
         lines.append("")
         lines.append(f"**Time:** {start_min}:{start_sec:05.2f} - {end_min}:{end_sec:05.2f} ({duration:.0f}s)")
         lines.append(f"**Hook:** {clip.get('hook', '')}")
         lines.append(f"**Why:** {clip.get('why', '')}")
+
+        # Virality scorecard
+        if vir and vir.get("subscores"):
+            driver = vir.get("predicted_driver")
+            if driver:
+                lines.append(f"**Predicted driver:** {driver.replace('_', '-')}")
+            if vir.get("rationale"):
+                lines.append(f"**Read:** {vir['rationale']}")
+            sub = vir["subscores"]
+            cells = []
+            for d in RUBRIC:
+                v = sub.get(d["key"])
+                if v is not None:
+                    cells.append(f"{d['label']} {v}/10")
+            if cells:
+                lines.append(f"**Scorecard:** {' · '.join(cells)}")
+            dq = vir.get("disqualifiers") or []
+            if dq:
+                lines.append(f"**⚠️ Disqualifiers:** {', '.join(dq)}")
 
         # Speaker info
         speaker_tl = clip.get("speaker_timeline", [])
@@ -570,6 +775,10 @@ def main():
         clips_data = select_clips_windowed(transcript_data, layout_data, config, episode_context)
     else:
         clips_data = select_clips_single(transcript_data, layout_data, config, episode_context)
+
+    # Score every candidate against the virality rubric and rank by score.
+    scored = score_clips(clips_data.get("clips", []), transcript_data, config, episode_context)
+    clips_data = {"clips": scored}
 
     num_clips = len(clips_data.get("clips", []))
     print(f"  {num_clips} clips selected")

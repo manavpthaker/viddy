@@ -1,6 +1,7 @@
 import React from 'react';
 import {Composition, getInputProps} from 'remotion';
 import {ClipComposition} from './ClipComposition';
+import {QuoteCard} from './components/QuoteCard';
 import type {RenderData} from './types';
 
 // Default render data for Remotion Studio preview
@@ -120,6 +121,19 @@ export const RemotionRoot: React.FC = () => {
         defaultProps={{
           renderData: defaultRenderData,
           format: 'square_1_1' as const,
+        }}
+      />
+      <Composition
+        id="QuoteCard"
+        component={QuoteCard}
+        durationInFrames={1}
+        fps={30}
+        width={1080}
+        height={1350}
+        defaultProps={{
+          quote: 'You can not out-effort a ghost.',
+          attribution: defaultRenderData.title,
+          brand: defaultRenderData.brand,
         }}
       />
     </>

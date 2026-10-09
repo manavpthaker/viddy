@@ -59,7 +59,11 @@ Examples:
     parser.add_argument("--concurrency", type=int, default=3, help="Parallel renders (default: 3)")
     parser.add_argument("--context", help="Path to episode context JSON (default: config/episode.json)")
     parser.add_argument("--skip-layout", action="store_true", help="Skip layout detection")
-    parser.add_argument("--step", choices=["transcribe", "layout", "select", "cut", "prepare"],
+    parser.add_argument("--skip-tracking", action="store_true",
+                        help="Skip A/V active-speaker tracking (use transcript-based reframing)")
+    parser.add_argument("--skip-packaging", action="store_true",
+                        help="Skip shareability packs (copy, covers, quote cards)")
+    parser.add_argument("--step", choices=["transcribe", "layout", "select", "cut", "track", "prepare", "package"],
                         help="Run a single step only")
     parser.add_argument("--output-name", help="Override the output folder name")
     args = parser.parse_args()
@@ -92,6 +96,14 @@ Examples:
             sys.exit(run_step("select_clips.py", step_args, "Select Clips"))
         elif args.step == "cut":
             sys.exit(run_step("cut_clips.py", [video_path, clips_json_path], "Cut Clips"))
+        elif args.step == "track":
+            sys.exit(run_step("track_speakers.py", [clips_dir], "Track Speakers (A/V reframe)"))
+        elif args.step == "package":
+            pkg_args = [transcript_path, manifest_path, "--output-dir", os.path.join(clips_dir, "social")]
+            context_path = args.context or str(ROOT / "config" / "episode.json")
+            if os.path.exists(context_path):
+                pkg_args += ["--context", context_path]
+            sys.exit(run_step("package_clips.py", pkg_args, "Package Clips (shareability)"))
         elif args.step == "prepare":
             step_args = [transcript_path, manifest_path]
             if os.path.exists(layout_path):
@@ -184,6 +196,17 @@ Examples:
         if rc != 0:
             print("Silence trimming failed. Continuing with untrimmed clips.", file=sys.stderr)
 
+        # Step 5.5: Audio-visual active-speaker tracking (real reframing).
+        # Runs on the final trimmed clips, so the reframe timeline needs no remap.
+        # Optional + non-fatal: if deps are missing the renderer falls back to
+        # the transcript-based speaker timeline.
+        if not args.skip_tracking:
+            rc = run_step("track_speakers.py", [clips_dir], "Track Speakers (A/V reframe)")
+            if rc != 0:
+                print("Speaker tracking failed. Falling back to transcript-based reframing.", file=sys.stderr)
+        else:
+            print("\nSkipping speaker tracking (--skip-tracking)")
+
         # Step 6: Prepare render data (remaps timestamps if silence was trimmed)
         step_args = [transcript_path, manifest_path]
         if os.path.exists(layout_path):
@@ -217,6 +240,28 @@ Examples:
             print("Rendering failed.", file=sys.stderr)
             sys.exit(1)
 
+        # Step 8: Shareability packs (copy, hooks, covers) + quote cards.
+        # Optional + non-fatal: needs ANTHROPIC_API_KEY; clips still render without it.
+        if not args.skip_packaging:
+            social_dir = os.path.join(clips_dir, "social")
+            pkg_args = [transcript_path, manifest_path, "--output-dir", social_dir]
+            context_path = args.context or str(ROOT / "config" / "episode.json")
+            if os.path.exists(context_path):
+                pkg_args += ["--context", context_path]
+            rc = run_step("package_clips.py", pkg_args, "Package Clips (shareability)")
+            if rc != 0:
+                print("Packaging failed. Clips are still rendered.", file=sys.stderr)
+            else:
+                # Render quote cards from the packs.
+                stills_cmd = [
+                    "node", str(ROOT / "remotion" / "render_stills.mjs"),
+                    "--social-dir", social_dir,
+                ]
+                print(f"\n{'='*60}\n  STEP: Render Quote Cards\n{'='*60}\n")
+                subprocess.run(stills_cmd, cwd=str(ROOT / "remotion"))
+        else:
+            print("\nSkipping shareability packaging (--skip-packaging)")
+
         # Summary
         print("\n" + "=" * 60)
         print("  PIPELINE COMPLETE")
@@ -224,6 +269,8 @@ Examples:
         print(f"\n  Cut clips:    {clips_dir}/")
         print(f"  Render data:  {clips_dir}/render_data/")
         print(f"  Final output: {output_dir}/")
+        if not args.skip_packaging:
+            print(f"  Social packs: {clips_dir}/social/ (copy, covers, quote cards)")
         print()
 
 

@@ -11,6 +11,8 @@ Output:
     clips/<video_name>/render_data/clip_01.json, clip_02.json, etc.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -26,6 +28,19 @@ def load_brand_config() -> dict:
 def load_default_config() -> dict:
     root = Path(__file__).parent.parent
     with open(root / "config" / "default.json") as f:
+        return json.load(f)
+
+
+def load_reframe(clip_file: str) -> dict | None:
+    """Load <clip>.reframe.json if track_speakers.py produced one.
+
+    Computed on the final trimmed clip, so its keyframes are already on the
+    rendered timeline — no keep_segments remapping needed.
+    """
+    reframe_path = Path(clip_file).with_suffix(".reframe.json")
+    if not reframe_path.exists():
+        return None
+    with open(reframe_path) as f:
         return json.load(f)
 
 
@@ -96,6 +111,37 @@ def remap_zoom_moments(moments: list[dict], keep_segments: list[tuple[float, flo
         if new_at is not None:
             remapped.append({**zm, "at_seconds": round(new_at, 2)})
     return remapped
+
+
+def decide_layout(reframe: dict | None, clip_data: dict, render_config: dict) -> str:
+    """Pick 'composite' (screen + speaker) or 'speaker' (single reframe).
+
+    Order: explicit per-clip override -> config default -> auto-detect.
+    Auto picks composite when there's a real face track that is SMALL and in a
+    CORNER (a webcam over a screen share) and a detected screen-content box.
+    """
+    override = clip_data.get("layout")
+    if override in ("speaker", "composite"):
+        return override
+
+    default = render_config.get("default_layout", "auto")
+    if default in ("speaker", "composite"):
+        return default
+
+    if not reframe:
+        return "speaker"
+    if reframe.get("method") not in ("av_active_speaker", "face_track"):
+        return "speaker"
+    if not reframe.get("screen_rect"):
+        return "speaker"
+
+    stats = reframe.get("face_stats", {})
+    face_h = stats.get("median_face_h", 1.0)
+    corner = stats.get("corner_offset", 0.0)
+    # Small face tucked in a corner over a shared screen -> composite.
+    if face_h < 0.22 and corner > 0.18:
+        return "composite"
+    return "speaker"
 
 
 def get_words_for_range(words: list[dict], start: float, end: float, padding: float = 0.5) -> list[dict]:
@@ -291,6 +337,16 @@ def main():
         else:
             duration = pre_trim_duration
 
+        # Load real audio-visual reframe track (preferred over transcript guess)
+        reframe = load_reframe(clip_file)
+        if reframe and reframe.get("source_width"):
+            source_dimensions = {
+                "width": reframe["source_width"],
+                "height": reframe["source_height"],
+            }
+        else:
+            source_dimensions = {"width": 1920, "height": 1080}
+
         render_data = {
             "clip_number": clip_num,
             "source_video": os.path.abspath(clip_file),
@@ -299,6 +355,8 @@ def main():
             "total_frames": int(duration * render_config["fps"]),
             "formats": render_config["formats"],
             "resolutions": render_config["resolution"],
+            "source_dimensions": source_dimensions,
+            "layout": decide_layout(reframe, clip_data, render_config),
 
             "hook": clip_data.get("hook", ""),
             "title": clip_data.get("suggested_title", ""),
@@ -320,6 +378,9 @@ def main():
                 "zoom_scale": 1.06
             },
 
+            # Real A/V reframe track (None -> renderer uses legacy speaker timeline)
+            "reframe": reframe,
+
             "brand": brand,
 
             "progress_bar": {
@@ -336,7 +397,13 @@ def main():
         with open(output_path, "w") as f:
             json.dump(render_data, f, indent=2)
 
-        print(f"  Clip {clip_num}: {len(caption_groups)} caption groups, {len(speaker_timeline)} speaker segments, {len(zoom_emphasis)} zoom points")
+        reframe_note = (
+            f", reframe={reframe.get('method')} ({len(reframe.get('keyframes', []))} kf)"
+            if reframe else ", reframe=legacy"
+        )
+        print(f"  Clip {clip_num}: {len(caption_groups)} caption groups, "
+              f"{len(speaker_timeline)} speaker segments, {len(zoom_emphasis)} zoom points"
+              f"{reframe_note}, layout={render_data['layout']}")
 
     print(f"\nRender data saved to {output_dir}/")
     print("Next: Run Remotion to render final clips.")

@@ -1,0 +1,15 @@
+# Core pipeline (required)
+openai>=1.0.0           # Whisper transcription
+anthropic>=0.40.0       # Claude clip selection + layout detection
+
+# Audio-visual active-speaker tracking (optional — enables real reframing).
+# If these are not installed, the pipeline still runs and the renderer falls
+# back to the legacy transcript-based speaker timeline.
+numpy>=1.24
+opencv-python>=4.8      # frame decoding for face tracking
+mediapipe>=0.10         # FaceMesh: face detection + lip landmarks
+
+# Best-quality voice activity detection (optional within the optional block).
+# Without pyannote (or without HUGGINGFACE_TOKEN), an ffmpeg energy-based
+# VAD is used instead — lower quality but no extra setup.
+# pyannote.audio>=3.1

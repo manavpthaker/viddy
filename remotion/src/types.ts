@@ -26,6 +26,37 @@ export interface ZoomMoment {
   transition: string;
 }
 
+// Audio-visual reframe track produced by scripts/track_speakers.py.
+// All centers/sizes are normalized [0,1] relative to the source frame.
+export interface ReframeKeyframe {
+  t: number; // seconds on the clip timeline
+  cx: number; // active-face center x (0..1)
+  cy: number; // active-face center y (0..1)
+  face_h: number; // active-face height (0..1 of source height)
+  speaking: boolean;
+  track: number; // active face-track id (-1 when none)
+}
+
+export interface ScreenRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface ReframeTrack {
+  source_width: number;
+  source_height: number;
+  sampled_fps: number;
+  duration_seconds: number;
+  method: string; // 'av_active_speaker' | 'face_track' | 'fallback_center'
+  vad?: string;
+  num_tracks?: number;
+  screen_rect?: ScreenRect | null;
+  face_stats?: Record<string, number>;
+  keyframes: ReframeKeyframe[];
+}
+
 export interface BrandConfig {
   colors: {
     background: string;
@@ -79,6 +110,9 @@ export interface RenderData {
     moments: ZoomMoment[];
     zoom_scale: number;
   };
+  source_dimensions?: {width: number; height: number};
+  reframe?: ReframeTrack | null;
+  layout?: 'speaker' | 'composite';
   brand: BrandConfig;
   progress_bar: ProgressBarConfig;
 }
